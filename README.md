@@ -9,8 +9,6 @@ No cloud. No AWS. No costs.
 
 ## ✨ Features
 
-- 🎨 **Beautiful Terminal UI** - Rich, colorful interface with progress bars and panels
-- �️ **Safety Guards** - Prevents destructive commands and cluster damage
 - �📊 **Real-time Monitoring** - Watch Kubernetes resources update live with "check" command
 - 💡 **Progressive Hints** - Unlocks gradually as you need help
 - 📚 **Step-by-Step Guides** - Beginner-friendly walkthroughs when you need them
@@ -94,7 +92,7 @@ python3 engine/reset.py all
 
 ## 📚 Learning Path
 
-### 🎯 World 1: Core Kubernetes Basics (Levels 1-10) ✅ COMPLETE
+### 🎯 World 1: Core Kubernetes Basics (Levels 1-10) 
 **Difficulty**: Beginner | **Total XP**: 1,000  
 Master the fundamentals of Kubernetes debugging and troubleshooting.
 
@@ -109,7 +107,7 @@ Master the fundamentals of Kubernetes debugging and troubleshooting.
 - ✅ Level 9: Init Container Gridlock (100 XP)
 - ✅ Level 10: Namespace Confusion (100 XP)
 
-### 🏆 World 2: Deployments & Scaling (Levels 11-20) ✅ COMPLETE
+### 🏆 World 2: Deployments & Scaling (Levels 11-20) 
 **Difficulty**: Intermediate | **Total XP**: 1,350  
 Master deployment strategies, scaling, and health checks.
 
@@ -117,7 +115,7 @@ Master deployment strategies, scaling, and health checks.
 - ✅ PodDisruptionBudgets, canary deployments, anti-affinity
 - ✅ Resource management, pod lifecycle, and production patterns
 
-### 🏆 World 3: Networking & Services (Levels 21-30) ✅ COMPLETE
+### 🏆 World 3: Networking & Services (Levels 21-30) 
 **Difficulty**: Intermediate | **Total XP**: 2,100  
 Master service discovery, load balancing, and network policies.
 
@@ -125,7 +123,7 @@ Master service discovery, load balancing, and network policies.
 - ✅ DNS resolution, Ingress controllers, NetworkPolicies
 - ✅ Session affinity, cross-namespace communication, headless services
 
-### 🏆 World 4: Storage & Stateful Apps (Levels 31-40) ✅ COMPLETE
+### 🏆 World 4: Storage & Stateful Apps (Levels 31-40) 
 **Difficulty**: Advanced | **Total XP**: 2,600  
 Master persistent storage, StatefulSets, and configuration management.
 
@@ -133,7 +131,7 @@ Master persistent storage, StatefulSets, and configuration management.
 - ✅ StatefulSets, volume permissions, reclaim policies
 - ✅ ConfigMaps, Secrets, and production storage patterns
 
-### 🏆 World 5: Security & Production Ops (Levels 41-50) ✅ COMPLETE
+### 🏆 World 5: Security & Production Ops (Levels 41-50) 
 **Difficulty**: Advanced | **Total XP**: 3,150  
 Production-ready Kubernetes: RBAC, security, resource management, and chaos engineering.
 
