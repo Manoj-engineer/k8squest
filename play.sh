@@ -8,5 +8,15 @@ if [ ! -d "venv" ]; then
   exit 1
 fi
 
-source venv/bin/activate
-python3 engine/engine.py
+# Set PYTHONPATH to include the project root
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+
+# Use venv Python directly (cross-platform)
+if [ -f "venv/bin/python3" ]; then
+  venv/bin/python3 engine/engine.py
+elif [ -f "venv/Scripts/python.exe" ]; then
+  venv/Scripts/python.exe engine/engine.py
+else
+  echo "❌ Virtual environment Python not found"
+  exit 1
+fi

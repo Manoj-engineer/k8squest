@@ -17,11 +17,23 @@ echo ""
 if [ ! -d "venv" ]; then
   echo "🐍 Creating Python virtual environment..."
   python3 -m venv venv
+  if [ ! -d "venv" ]; then
+    echo "❌ Failed to create virtual environment"
+    exit 1
+  fi
 fi
 
 # Activate virtual environment and install dependencies
 echo "📦 Installing Python dependencies..."
-source venv/bin/activate
+if [ -f "venv/bin/activate" ]; then
+  source venv/bin/activate
+elif [ -f "venv/Scripts/activate" ]; then
+  source venv/Scripts/activate
+else
+  echo "❌ Virtual environment activation script not found"
+  echo "Expected: venv/bin/activate or venv/Scripts/activate"
+  exit 1
+fi
 pip install -q -r requirements.txt
 
 echo "✅ Python packages installed"
@@ -53,10 +65,6 @@ fi
 echo ""
 echo "🚀 Setup Complete!"
 echo ""
-echo "To start playing:"
-echo "  source venv/bin/activate"
-echo "  python3 engine/engine.py"
-echo ""
-echo "Or use the shortcut:"
+echo "To start playing, use the shortcut:"
 echo "  ./play.sh"
 echo ""

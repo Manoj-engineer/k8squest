@@ -26,7 +26,7 @@ from datetime import datetime
 
 # Import retro UI components
 try:
-    from engine.retro_ui import (
+    from retro_ui import (
         show_retro_welcome, show_level_start, show_victory,
         show_command_menu, show_power_up_notification,
         show_retro_header, show_xp_bar, show_world_entry,
@@ -39,7 +39,7 @@ except ImportError:
 
 # Import player name generator
 try:
-    from engine.player_name import get_player_name
+    from player_name import get_player_name
 except ImportError:
     def get_player_name(console, current_name=None):
         from rich.prompt import Prompt
@@ -47,7 +47,7 @@ except ImportError:
 
 # Import safety guards
 try:
-    from engine.safety import validate_kubectl_command, print_safety_info
+    from safety import validate_kubectl_command, print_safety_info
     SAFETY_ENABLED = os.environ.get("K8SQUEST_SAFETY", "on").lower() != "off"
 except ImportError:
     SAFETY_ENABLED = False
