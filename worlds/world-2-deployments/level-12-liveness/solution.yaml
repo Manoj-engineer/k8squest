@@ -15,16 +15,13 @@ spec:
     spec:
       containers:
       - name: api
-        image: hashicorp/http-echo:latest
-        args:
-          - "-text=API is running"
-          - "-listen=:8080"
+        image: nginx:alpine
         ports:
-        - containerPort: 8080
+        - containerPort: 80
         livenessProbe:
           httpGet:
-            path: /  # Correct endpoint
-            port: 8080
+            path: /  # ✅ Correct endpoint - nginx serves index page at /
+            port: 80
           initialDelaySeconds: 5
           periodSeconds: 10
           failureThreshold: 3

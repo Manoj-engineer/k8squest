@@ -2,7 +2,7 @@
 
 The liveness probe is checking `/nonexistent-healthz` which doesn't exist (404 error).
 
-The http-echo app responds on the root path `/`.
+The nginx server responds successfully on the root path `/`.
 
 Steps to fix:
 1. Edit the deployment:

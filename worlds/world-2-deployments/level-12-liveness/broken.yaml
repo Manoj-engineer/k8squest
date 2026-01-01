@@ -15,16 +15,13 @@ spec:
     spec:
       containers:
       - name: api
-        image: hashicorp/http-echo:latest
-        args:
-          - "-text=API is running"
-          - "-listen=:8080"
+        image: nginx:alpine
         ports:
-        - containerPort: 8080
+        - containerPort: 80
         livenessProbe:
           httpGet:
-            path: /nonexistent-healthz  # Wrong endpoint!
-            port: 8080
+            path: /nonexistent-healthz  # ❌ Wrong endpoint! nginx returns 404
+            port: 80
           initialDelaySeconds: 5
           periodSeconds: 5
           failureThreshold: 2
