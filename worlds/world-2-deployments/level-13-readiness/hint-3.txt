@@ -12,7 +12,7 @@ Steps:
         readinessProbe:
           httpGet:
             path: /
-            port: 8080
+            port: 80
           initialDelaySeconds: 22  # Wait for the 20s sleep + 2s buffer
           periodSeconds: 5
           successThreshold: 1
