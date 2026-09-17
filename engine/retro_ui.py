@@ -264,6 +264,7 @@ def show_command_menu():
         "[yellow]hints[/yellow]     - 💡 Progressive hints\n"
         "[yellow]solution[/yellow]  - 📄 View solution.yaml\n"
         "[yellow]validate[/yellow]  - ✅ Test your fix\n"
+        "[yellow]restart[/yellow]   - 🔄 Restart level\n"
         "[yellow]skip[/yellow]      - ⏭️  Skip level\n"
         "[yellow]quit[/yellow]      - 🚪 Save & exit",
         border_style="cyan",

@@ -1074,6 +1074,7 @@ Look for "2/2" ready replicas!
                         "hints",
                         "solution",
                         "validate",
+                        "restart",
                         "skip",
                         "quit",
                     ],
@@ -1181,6 +1182,12 @@ Look for "2/2" ready replicas!
 
                     if not Confirm.ask("Try again?", default=True):
                         return False
+
+            elif action == "restart":
+                if Confirm.ask(
+                    "Restart this level?", default=True
+                ):
+                    return None
 
             elif action == "skip":
                 if Confirm.ask(
@@ -1376,8 +1383,17 @@ Look for "2/2" ready replicas!
             self.progress["current_world"] = world_name
             self.save_progress()
 
-            if not self.play_level(level_path, level_name):
-                return False  # Player quit or stopped
+            # Play the same level if it gets reset
+            while True:
+                result = self.play_level(level_path, level_name)
+                
+                if result is None:
+                    continue  # Restart the same level
+                
+                if not result:
+                    return False  # Player quit or stopped
+                
+                break
 
         # World complete!
         console.clear()

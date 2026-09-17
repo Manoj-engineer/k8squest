@@ -198,6 +198,7 @@ This provides a native Linux environment and the smoothest experience.
 - `hints` - Display progressive hints (unlocks more on each use)
 - `solution` - View the solution.yaml file
 - `validate` - Test if your solution works
+- `restart` - Restart level
 - `skip` - Skip to the next level (no XP awarded)
 - `quit` - Exit the game (progress is auto-saved)
 
