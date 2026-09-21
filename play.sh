@@ -1,353 +1,826 @@
-#!/bin/bash
-# Quick launcher for K8sQuest
+#!/usr/bin/env bash
 
-cd "$(dirname "$0")"
+# ============================================================
+# K8sQuest Launcher
+#
+# Supported Kubernetes environments:
+#   - Kind
+#   - k3s
+#   - Bare / kubeadm / existing Kubernetes cluster
+# ============================================================
 
-# Resolve the Python interpreter to use, in priority order:
+set -Eeuo pipefail
+
+# ============================================================
+# Configuration
+# ============================================================
+
+NAMESPACE="k8squest"
+
+# ============================================================
+# Helper functions
+# ============================================================
+
+info() {
+    echo "ℹ️  $1"
+}
+
+success() {
+    echo "✅ $1"
+}
+
+warning() {
+    echo "⚠️  $1"
+}
+
+error() {
+    echo "❌ $1"
+    exit 1
+}
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# ============================================================
+# Error handler
+# ============================================================
+
+trap 'echo ""; error "Launcher failed at line $LINENO while executing: $BASH_COMMAND"' ERR
+
+# ============================================================
+# Move to project directory
+# ============================================================
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+cd "$SCRIPT_DIR"
+
+echo ""
+echo "🎮 K8sQuest"
+echo "==========="
+echo ""
+
+# ============================================================
+# Find Python
+# ============================================================
+
 _find_python() {
-  if [ -n "$CONDA_PREFIX" ]; then
-    if   [ -f "$CONDA_PREFIX/bin/python3" ]; then echo "$CONDA_PREFIX/bin/python3"; return
-    elif [ -f "$CONDA_PREFIX/bin/python"  ]; then echo "$CONDA_PREFIX/bin/python";  return
+
+    # --------------------------------------------------------
+    # Conda
+    # --------------------------------------------------------
+
+    if [ -n "${CONDA_PREFIX:-}" ]; then
+
+        if [ -f "$CONDA_PREFIX/bin/python3" ]; then
+            echo "$CONDA_PREFIX/bin/python3"
+            return 0
+
+        elif [ -f "$CONDA_PREFIX/bin/python" ]; then
+            echo "$CONDA_PREFIX/bin/python"
+            return 0
+        fi
+
     fi
-  fi
-  if [ -n "$VIRTUAL_ENV" ]; then
-    if   [ -f "$VIRTUAL_ENV/bin/python3"       ]; then echo "$VIRTUAL_ENV/bin/python3";       return
-    elif [ -f "$VIRTUAL_ENV/Scripts/python.exe" ]; then echo "$VIRTUAL_ENV/Scripts/python.exe"; return
+
+    # --------------------------------------------------------
+    # Virtual environment
+    # --------------------------------------------------------
+
+    if [ -n "${VIRTUAL_ENV:-}" ]; then
+
+        if [ -f "$VIRTUAL_ENV/bin/python3" ]; then
+            echo "$VIRTUAL_ENV/bin/python3"
+            return 0
+
+        elif [ -f "$VIRTUAL_ENV/bin/python" ]; then
+            echo "$VIRTUAL_ENV/bin/python"
+            return 0
+        fi
+
     fi
-  fi
-  if   [ -f "venv/bin/python3"       ]; then echo "venv/bin/python3";       return
-  elif [ -f "venv/Scripts/python.exe" ]; then echo "venv/Scripts/python.exe"; return
-  fi
-}
 
-# Function to check if a cluster is already running
-_check_existing_clusters() {
-  local has_kind=false
-  local has_k3s=false
+    # --------------------------------------------------------
+    # Project venv
+    # --------------------------------------------------------
 
-  # Check for kind clusters
-  if command -v kind &> /dev/null; then
-    if kind get clusters 2>/dev/null | grep -q .; then
-      has_kind=true
+    if [ -x "$SCRIPT_DIR/venv/bin/python3" ]; then
+        echo "$SCRIPT_DIR/venv/bin/python3"
+        return 0
+
+    elif [ -x "$SCRIPT_DIR/venv/bin/python" ]; then
+        echo "$SCRIPT_DIR/venv/bin/python"
+        return 0
     fi
-  fi
 
-  # Check for k3s
-  if systemctl is-active --quiet k3s 2>/dev/null; then
-    has_k3s=true
-  elif [ -f /etc/rancher/k3s/k3s.yaml ] && kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get nodes &> /dev/null; then
-    has_k3s=true
-  fi
-
-  if $has_kind && $has_k3s; then
-    echo "both"
-  elif $has_kind; then
-    echo "kind"
-  elif $has_k3s; then
-    echo "k3s"
-  else
-    echo "none"
-  fi
-}
-
-# Function to set up k3s kubeconfig
-_setup_k3s_kubeconfig() {
-  local default_kubeconfig="/etc/rancher/k3s/k3s.yaml"
-  
-  # Check if k3s is running
-  if ! systemctl is-active --quiet k3s 2>/dev/null; then
-    echo "ℹ️  k3s is installed but not running. Starting..."
-    sudo systemctl start k3s
-    echo "⏳ Waiting for k3s to start..."
-    local k3s_attempt=0
-    until timeout 10 k3s kubectl get nodes &> /dev/null; do
-      k3s_attempt=$((k3s_attempt + 1))
-      if [ $k3s_attempt -ge 90 ]; then
-        echo "❌ k3s failed to start within 3 minutes"
-        return 1
-      fi
-      sleep 2
-    done
-  fi
-  
-  # Ask for custom kubeconfig path
-  echo ""
-  echo "Default k3s kubeconfig location: $default_kubeconfig"
-  echo "Note: This file requires root permissions to read."
-  read -p "Enter custom path for kubeconfig (or press Enter for default: $HOME/.kube/k3s-config): " CUSTOM_KUBECONFIG
-  
-  if [ -z "$CUSTOM_KUBECONFIG" ]; then
-    CUSTOM_KUBECONFIG="$HOME/.kube/k3s-config"
-  fi
-  
-  # If custom path is not the default, copy it
-  if [ "$CUSTOM_KUBECONFIG" != "$default_kubeconfig" ]; then
-    echo "ℹ️  Using custom kubeconfig path: $CUSTOM_KUBECONFIG"
-    echo "📦 Copying k3s kubeconfig to $CUSTOM_KUBECONFIG..."
-    mkdir -p "$(dirname "$CUSTOM_KUBECONFIG")"
-    sudo cp "$default_kubeconfig" "$CUSTOM_KUBECONFIG"
-    sudo chown "$USER:$USER" "$CUSTOM_KUBECONFIG"
-    export KUBECONFIG="$CUSTOM_KUBECONFIG"
-  else
-    # Copy to user-accessible location anyway
-    echo "📦 Copying k3s kubeconfig to $HOME/.kube/k3s-config..."
-    mkdir -p "$HOME/.kube"
-    sudo cp "$default_kubeconfig" "$HOME/.kube/k3s-config"
-    sudo chown "$USER:$USER" "$HOME/.kube/k3s-config"
-    export KUBECONFIG="$HOME/.kube/k3s-config"
-  fi
-  
-  _rename_k3s_context "$KUBECONFIG"
-
-  # Symlink default kubeconfig so new terminals auto-use this config
-  if [ -f "$HOME/.kube/config" ] && [ ! -L "$HOME/.kube/config" ]; then
-    cp "$HOME/.kube/config" "$HOME/.kube/config.k8squest.bak"
-    echo "ℹ️  Backed up ~/.kube/config → ~/.kube/config.k8squest.bak (your existing config is preserved there)"
-  fi
-  ln -snf "$KUBECONFIG" "$HOME/.kube/config"
-
-  echo "✅ k3s cluster is ready (kubeconfig: $KUBECONFIG)"
-}
-
-# Rename k3s context from 'default' to 'k3s-k8squest'
-_rename_k3s_context() {
-  local kubeconfig="$1"
-  local new_ctx="k3s-k8squest"
-  local tmp_dir="/tmp/k8squest-k3s-$$"
-
-  [ ! -f "$kubeconfig" ] && return
-
-  local cur_ctx
-  cur_ctx=$(kubectl --kubeconfig="$kubeconfig" config view -o jsonpath='{.current-context}' 2>/dev/null)
-  [ "$cur_ctx" = "$new_ctx" ] && return
-
-  echo "🔄 Renaming k3s context from '$cur_ctx' to '$new_ctx'..."
-
-  local json
-  json=$(kubectl --kubeconfig="$kubeconfig" config view --raw -o json 2>/dev/null)
-
-  local server ca_data cert_data key_data
-  server=$(echo "$json" | jq -r --arg ctx "$cur_ctx" '.clusters[] | select(.name==$ctx) | .cluster.server')
-  ca_data=$(echo "$json" | jq -r --arg ctx "$cur_ctx" '.clusters[] | select(.name==$ctx) | .cluster["certificate-authority-data"] // empty')
-  cert_data=$(echo "$json" | jq -r --arg ctx "$cur_ctx" '.users[] | select(.name==$ctx) | .user["client-certificate-data"] // empty')
-  key_data=$(echo "$json" | jq -r --arg ctx "$cur_ctx" '.users[] | select(.name==$ctx) | .user["client-key-data"] // empty')
-
-  if [ -z "$server" ]; then
-    echo "❌ Failed to extract cluster '$cur_ctx' from kubeconfig"
     return 1
-  fi
-
-  # Write cert data to temp files (old kubectl doesn't have --*-data flags)
-  mkdir -p "$tmp_dir"
-  echo "$ca_data" | tr -d '\n' | base64 -d > "$tmp_dir/ca.crt" 2>/dev/null
-  echo "$cert_data" | tr -d '\n' | base64 -d > "$tmp_dir/client.crt" 2>/dev/null
-  echo "$key_data" | tr -d '\n' | base64 -d > "$tmp_dir/client.key" 2>/dev/null
-
-  kubectl --kubeconfig="$kubeconfig" config set-cluster "$new_ctx" \
-    --server="$server" --certificate-authority="$tmp_dir/ca.crt" --embed-certs
-
-  kubectl --kubeconfig="$kubeconfig" config set-credentials "$new_ctx" \
-    --client-certificate="$tmp_dir/client.crt" --client-key="$tmp_dir/client.key" --embed-certs
-
-  kubectl --kubeconfig="$kubeconfig" config set-context "$new_ctx" \
-    --cluster="$new_ctx" --user="$new_ctx" --namespace="k8squest"
-
-  kubectl --kubeconfig="$kubeconfig" config use-context "$new_ctx"
-
-  rm -rf "$tmp_dir"
 }
 
-# Function to install k3s
-_install_k3s() {
-  echo "🔧 Setting up k3s cluster..."
-  if ! command -v k3s &> /dev/null; then
-    # Remove any dangling kubectl symlink from a previous uninstall
-    if [ -L /usr/local/bin/kubectl ] && [ ! -e /usr/local/bin/kubectl ]; then
-      echo "🧹 Removing stale kubectl symlink..."
-      sudo rm -f /usr/local/bin/kubectl
-    fi
-    echo "📦 Installing k3s..."
-    curl -sfL https://get.k3s.io | sh -s - server \
-      --cluster-init \
-      --disable traefik \
-      --write-kubeconfig-mode 644
-    if [ $? -ne 0 ]; then
-      echo "❌ Failed to install k3s"
-      exit 1
-    fi
-    hash -r
-    echo "⏳ Waiting for k3s to start..."
-    local k3s_attempt=0
-    until timeout 10 k3s kubectl get nodes &> /dev/null; do
-      k3s_attempt=$((k3s_attempt + 1))
-      if [ $k3s_attempt -ge 90 ]; then
-        echo "❌ k3s failed to start within 3 minutes"
-        exit 1
-      fi
-      sleep 2
-    done
-  else
-    echo "ℹ️  k3s is already installed. Starting service if not running..."
-    sudo systemctl start k3s || true
-  fi
-  _setup_k3s_kubeconfig
-  
-  # Run k3s compatibility setup
-  if [ -f "$(dirname "$0")/k3s-setup.sh" ]; then
-    echo "🔧 Running k3s compatibility setup for K8sQuest..."
-    bash "$(dirname "$0")/k3s-setup.sh"
-  fi
-}
+PYTHON="$(_find_python || true)"
 
-PYTHON=$(_find_python)
 if [ -z "$PYTHON" ]; then
-  echo "❌ No Python environment found. Please run ./install.sh first"
-  echo "   Supported: conda env, virtualenv, or project venv (created by install.sh)"
-  exit 1
+
+    error "No Python environment found.
+
+Please run:
+
+    ./install.sh
+
+first."
+
 fi
 
-# Check and install jq if needed (required for some level validations)
-if ! command -v jq &> /dev/null; then
-    echo "📦 jq not found. Installing jq (required for Level 33 and other validations)..."
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install jq || { echo "❌ Failed to install jq. Please install manually: brew install jq"; exit 1; }
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        sudo apt-get update && sudo apt-get install -y jq || { echo "❌ Failed to install jq. Please install manually: sudo apt-get install jq"; exit 1; }
-    elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
-        echo "💡 For Windows, please install jq manually:"
-        echo "   Option 1 (Chocolatey): choco install jq"
-        echo "   Option 2 (Scoop): scoop install jq"
-        echo "   Option 3: Download from https://stedolan.github.io/jq/download/"
-        exit 1
+success "Python: $PYTHON"
+
+# ============================================================
+# Check kubectl
+# ============================================================
+
+if ! command_exists kubectl; then
+    error "kubectl is not installed."
+fi
+
+success "kubectl detected"
+
+# ============================================================
+# Check jq
+# ============================================================
+
+if ! command_exists jq; then
+
+    warning "jq is not installed."
+
+    if command_exists apt-get; then
+
+        echo ""
+        read -r -p "Install jq using apt? [Y/n]: " INSTALL_JQ
+
+        case "${INSTALL_JQ:-Y}" in
+
+            [Yy]*)
+                if [ "$(id -u)" -eq 0 ]; then
+                    apt-get update
+                    apt-get install -y jq
+                elif command_exists sudo; then
+                    sudo apt-get update
+                    sudo apt-get install -y jq
+                else
+                    error "sudo is not available. Install jq manually."
+                fi
+                ;;
+
+            *)
+                error "jq is required by K8sQuest."
+                ;;
+        esac
+
     else
-        echo "❌ Unsupported OS. Please install jq manually."
-        echo "💡 Download from: https://stedolan.github.io/jq/download/"
-        exit 1
+
+        error "jq is required by K8sQuest.
+
+Please install jq manually."
+
     fi
-    echo "✅ jq installed successfully"
+
 fi
 
-# Set PYTHONPATH to include the project root
-export PYTHONPATH="$(pwd):$PYTHONPATH"
+success "jq detected"
 
-# Check for existing clusters
-EXISTING_CLUSTER=$(_check_existing_clusters)
+# ============================================================
+# Set PYTHONPATH
+# ============================================================
 
-if [ "$EXISTING_CLUSTER" != "none" ] && [ -z "$K8S_CLUSTER_TYPE" ]; then
-  echo ""
-  echo "╔══════════════════════════════════════════════════════════════╗"
-  echo "║  ⚠️  Detected existing $EXISTING_CLUSTER cluster(s) running!  ║"
-  echo "╚══════════════════════════════════════════════════════════════╝"
-  echo ""
-  if [ "$EXISTING_CLUSTER" = "both" ]; then
-    echo "📊 Both 🐳 kind and 🚀 k3s clusters are detected."
-    echo ""
-    echo "  Options:"
-    echo "    1) 🐳 Use existing kind cluster"
-    echo "    2) 🚀 Use existing k3s cluster"
-    echo "    3) 🔄 Reinstall/restart k3s (will not affect kind)"
-    echo "    4) ⏭️  Continue without changes (use current kubectl context)"
-    echo ""
-    read -p "  Select option [1-4] (default: 1): " CLUSTER_CHOICE
-    case $CLUSTER_CHOICE in
-      2)
-        echo "  ✅ Using existing k3s cluster"
-        export K8S_CLUSTER_TYPE=k3s
-        _setup_k3s_kubeconfig
-        ;;
-      3)
-        export K8S_CLUSTER_TYPE=k3s
-        _install_k3s
-        ;;
-      4)
-        echo "  ✅ Using current kubectl context"
-        ;;
-      *)
-        echo "  ✅ Using existing kind cluster"
-        export K8S_CLUSTER_TYPE=kind
-        ;;
-    esac
-  else
-    echo "  📊 An existing 🐳 $EXISTING_CLUSTER cluster is detected."
-    echo ""
-    read -p "  Do you want to use the existing $EXISTING_CLUSTER cluster? [Y/n]: " USE_EXISTING
-    case $USE_EXISTING in
-      [Nn]*)
-        if [ "$EXISTING_CLUSTER" = "k3s" ]; then
-          export K8S_CLUSTER_TYPE=k3s
-          _install_k3s
-        else
-          echo "  ✅ Using kind cluster"
-          export K8S_CLUSTER_TYPE=kind
-        fi
-        ;;
-      *)
-        echo "  ✅ Using existing $EXISTING_CLUSTER cluster"
-        if [ "$EXISTING_CLUSTER" = "k3s" ]; then
-          export K8S_CLUSTER_TYPE=k3s
-          _setup_k3s_kubeconfig
-        else
-          export K8S_CLUSTER_TYPE=kind
-        fi
-        ;;
-    esac
-  fi
-else
-  # Cluster selection prompt (only if no existing cluster detected or K8S_CLUSTER_TYPE is set)
-  if [ -z "$K8S_CLUSTER_TYPE" ]; then
-    echo ""
-    echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║          🎮 SELECT YOUR KUBERNETES CLUSTER TYPE 🎮             ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "  1) 🐳 kind  - Multi-node clusters in Docker containers"
-    echo "     └─ Perfect for: Learning, development, CI/CD pipelines"
-    echo "     └─ Pros: Easy setup, runs anywhere Docker runs, fast reset"
-    echo "     └─ Cons: Requires Docker, not production-like networking"
-    echo ""
-    echo "  2) 🚀 k3s  - Lightweight production-ready Kubernetes"
-    echo "     └─ Perfect for: Edge, IoT, local production-like testing"
-    echo "     └─ Pros: Real cluster, no Docker needed, closer to production"
-    echo "     └─ Cons: Uses system resources, single-node by default"
-    echo ""
-    read -p "Select cluster type [1/2] (default: kind): " CLUSTER_CHOICE
-    case $CLUSTER_CHOICE in
-      2|k3s|K3s)
-        export K8S_CLUSTER_TYPE=k3s
-        _install_k3s
-        ;;
-      *)
-        echo "✅ Using kind cluster"
-        export K8S_CLUSTER_TYPE=kind
-        ;;
-    esac
-  fi
-fi
+export PYTHONPATH="$SCRIPT_DIR${PYTHONPATH:+:$PYTHONPATH}"
 
-# When using kind, remove k3s symlink to restore default kubeconfig
-_remove_k3s_symlink() {
-  local default_kube="$HOME/.kube/config"
-  if [ -L "$default_kube" ]; then
-    local target
-    target="$(readlink "$default_kube")"
-    if [ "$target" = "k3s-config" ] || [ "$target" = "$HOME/.kube/k3s-config" ]; then
-      rm "$default_kube"
-      if [ -f "$HOME/.kube/config.k8squest.bak" ]; then
-        mv "$HOME/.kube/config.k8squest.bak" "$default_kube"
-        echo "ℹ️  Restored ~/.kube/config from backup (~/.kube/config.k8squest.bak)"
-      fi
+# ============================================================
+# Kubernetes validation
+# ============================================================
+
+_validate_kubernetes() {
+
+    echo ""
+    echo "☸️  Validating Kubernetes cluster..."
+    echo ""
+
+    # --------------------------------------------------------
+    # Check current context
+    # --------------------------------------------------------
+
+    local context
+
+    context="$(kubectl config current-context 2>/dev/null || true)"
+
+    if [ -z "$context" ]; then
+
+        error "No Kubernetes context is configured.
+
+Run:
+
+    kubectl config get-contexts"
+
     fi
-  fi
+
+    echo "📡 Current context:"
+    echo "   $context"
+    echo ""
+
+    # --------------------------------------------------------
+    # Check API server
+    # --------------------------------------------------------
+
+    if ! kubectl cluster-info >/dev/null 2>&1; then
+
+        error "Cannot connect to Kubernetes API server.
+
+Check:
+
+    kubectl cluster-info
+    kubectl get nodes"
+
+    fi
+
+    success "Kubernetes API server is reachable"
+
+    # --------------------------------------------------------
+    # Check nodes
+    # --------------------------------------------------------
+
+    echo ""
+    echo "🖥️  Kubernetes nodes:"
+    echo ""
+
+    kubectl get nodes -o wide
+
+    echo ""
+
+    local node_count
+
+    node_count="$(
+        kubectl get nodes --no-headers 2>/dev/null |
+        wc -l |
+        tr -d ' '
+    )"
+
+    if [ "$node_count" -eq 0 ]; then
+        error "No Kubernetes nodes found."
+    fi
+
+    # --------------------------------------------------------
+    # Check Ready status
+    # --------------------------------------------------------
+
+    local not_ready
+
+    not_ready="$(
+        kubectl get nodes --no-headers 2>/dev/null |
+        awk '$2 != "Ready" {print $1}'
+    )"
+
+    if [ -n "$not_ready" ]; then
+
+        warning "The following nodes are not Ready:"
+        echo "$not_ready"
+        echo ""
+
+        error "K8sQuest requires all Kubernetes nodes to be Ready."
+
+    fi
+
+    success "All Kubernetes nodes are Ready"
+
+    # --------------------------------------------------------
+    # Check namespace
+    # --------------------------------------------------------
+
+    if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+
+        success "Namespace '$NAMESPACE' exists"
+
+    else
+
+        info "Creating namespace '$NAMESPACE'..."
+
+        kubectl create namespace "$NAMESPACE"
+
+        success "Namespace '$NAMESPACE' created"
+
+    fi
+
+    # --------------------------------------------------------
+    # Set namespace in current context
+    # --------------------------------------------------------
+
+    kubectl config set-context \
+        --current \
+        --namespace="$NAMESPACE" >/dev/null 2>&1 || true
+
+    success "K8sQuest namespace configured"
+
+    echo ""
 }
 
-if [ "${K8S_CLUSTER_TYPE:-}" = "kind" ]; then
-  _remove_k3s_symlink
+# ============================================================
+# Detect existing clusters
+# ============================================================
+
+_check_existing_clusters() {
+
+    local has_kind=false
+    local has_k3s=false
+    local has_current_k8s=false
+
+    # --------------------------------------------------------
+    # Kind
+    # --------------------------------------------------------
+
+    if command_exists kind; then
+
+        if kind get clusters 2>/dev/null | grep -q .; then
+            has_kind=true
+        fi
+
+    fi
+
+    # --------------------------------------------------------
+    # k3s
+    # --------------------------------------------------------
+
+    if command_exists systemctl &&
+       systemctl is-active --quiet k3s 2>/dev/null; then
+
+        has_k3s=true
+
+    elif [ -f /etc/rancher/k3s/k3s.yaml ] &&
+         kubectl \
+            --kubeconfig=/etc/rancher/k3s/k3s.yaml \
+            get nodes >/dev/null 2>&1; then
+
+        has_k3s=true
+
+    fi
+
+    # --------------------------------------------------------
+    # Existing / bare Kubernetes
+    #
+    # This includes:
+    #   kubeadm
+    #   bare metal
+    #   VM-based cluster
+    #   cloud Kubernetes
+    #   any cluster accessible through kubectl
+    # --------------------------------------------------------
+
+    if kubectl cluster-info >/dev/null 2>&1; then
+        has_current_k8s=true
+    fi
+
+    # --------------------------------------------------------
+    # Return detected types
+    # --------------------------------------------------------
+
+    local result=""
+
+    $has_kind && result="${result}kind "
+    $has_k3s && result="${result}k3s "
+    $has_current_k8s && result="${result}bare "
+
+    echo "$result" | xargs
+}
+
+# ============================================================
+# Setup k3s kubeconfig
+# ============================================================
+
+_setup_k3s_kubeconfig() {
+
+    local default_kubeconfig="/etc/rancher/k3s/k3s.yaml"
+
+    # --------------------------------------------------------
+    # Check k3s
+    # --------------------------------------------------------
+
+    if ! systemctl is-active --quiet k3s 2>/dev/null; then
+
+        info "k3s is installed but not running. Starting..."
+
+        sudo systemctl start k3s
+
+        info "Waiting for k3s..."
+
+        local attempt=0
+
+        until timeout 10 k3s kubectl get nodes >/dev/null 2>&1; do
+
+            attempt=$((attempt + 1))
+
+            if [ "$attempt" -ge 90 ]; then
+                error "k3s failed to start within 3 minutes."
+            fi
+
+            sleep 2
+
+        done
+
+    fi
+
+    # --------------------------------------------------------
+    # Configure kubeconfig
+    # --------------------------------------------------------
+
+    local kubeconfig="$HOME/.kube/k3s-config"
+
+    echo ""
+    echo "Default k3s kubeconfig:"
+    echo "  $default_kubeconfig"
+    echo ""
+
+    read -r -p \
+        "Enter custom kubeconfig path (Enter for $kubeconfig): " \
+        custom
+
+    if [ -n "$custom" ]; then
+        kubeconfig="$custom"
+    fi
+
+    mkdir -p "$(dirname "$kubeconfig")"
+
+    info "Copying k3s kubeconfig..."
+
+    sudo cp "$default_kubeconfig" "$kubeconfig"
+    sudo chown "$(id -u):$(id -g)" "$kubeconfig"
+
+    export KUBECONFIG="$kubeconfig"
+
+    success "k3s kubeconfig configured: $KUBECONFIG"
+
+    _validate_kubernetes
+}
+
+# ============================================================
+# Install k3s
+# ============================================================
+
+_install_k3s() {
+
+    echo ""
+    echo "🔧 Setting up k3s..."
+    echo ""
+
+    if ! command_exists k3s; then
+
+        info "Installing k3s..."
+
+        if ! command_exists curl; then
+            error "curl is required to install k3s."
+        fi
+
+        curl -sfL https://get.k3s.io |
+            sh -s - server \
+            --cluster-init \
+            --disable traefik \
+            --write-kubeconfig-mode 644
+
+        hash -r
+
+    else
+
+        info "k3s is already installed."
+
+        sudo systemctl start k3s || true
+
+    fi
+
+    _setup_k3s_kubeconfig
+
+    # --------------------------------------------------------
+    # k3s compatibility setup
+    # --------------------------------------------------------
+
+    if [ -f "$SCRIPT_DIR/k3s-setup.sh" ]; then
+
+        info "Running k3s compatibility setup..."
+
+        bash "$SCRIPT_DIR/k3s-setup.sh"
+
+    fi
+}
+
+# ============================================================
+# Use existing / bare Kubernetes cluster
+# ============================================================
+
+_use_bare_kubernetes() {
+
+    echo ""
+    echo "============================================================"
+    echo "☸️  Existing Kubernetes Cluster"
+    echo "============================================================"
+    echo ""
+
+    info "K8sQuest will use your existing Kubernetes cluster."
+    echo ""
+    echo "This mode does NOT:"
+    echo "  • install Kubernetes"
+    echo "  • install k3s"
+    echo "  • create a Kind cluster"
+    echo "  • modify worker nodes"
+    echo "  • change your CNI"
+    echo ""
+
+    _validate_kubernetes
+
+    export K8S_CLUSTER_TYPE="bare"
+
+    local context
+
+    context="$(kubectl config current-context)"
+
+    export K8S_CLUSTER_CONTEXT="$context"
+
+    success "Using existing Kubernetes cluster"
+    success "Cluster type: bare"
+    success "Context: $context"
+}
+
+# ============================================================
+# Kind cluster
+# ============================================================
+
+_use_kind() {
+
+    if ! command_exists kind; then
+
+        error "Kind is not installed.
+
+Install Kind or select another cluster type."
+
+    fi
+
+    if ! command_exists docker; then
+
+        error "Docker is required for Kind."
+
+    fi
+
+    local clusters
+
+    clusters="$(kind get clusters 2>/dev/null || true)"
+
+    if [ -z "$clusters" ]; then
+
+        info "No Kind cluster detected."
+
+        error "Create a Kind cluster first or choose another cluster type."
+
+    fi
+
+    echo ""
+    echo "🐳 Available Kind clusters:"
+    echo ""
+
+    echo "$clusters"
+
+    echo ""
+
+    local kind_cluster
+
+    kind_cluster="$(echo "$clusters" | head -1)"
+
+    info "Using Kind cluster: $kind_cluster"
+
+    kubectl config use-context "kind-$kind_cluster"
+
+    export K8S_CLUSTER_TYPE="kind"
+
+    _validate_kubernetes
+
+    success "Kind cluster ready"
+}
+
+# ============================================================
+# Remove old k3s kubeconfig symlink
+# ============================================================
+
+_remove_k3s_symlink() {
+
+    local default_kube="$HOME/.kube/config"
+
+    if [ ! -L "$default_kube" ]; then
+        return
+    fi
+
+    local target
+
+    target="$(readlink "$default_kube" 2>/dev/null || true)"
+
+    if [[ "$target" == *"k3s-config"* ]]; then
+
+        rm -f "$default_kube"
+
+        if [ -f "$HOME/.kube/config.k8squest.bak" ]; then
+
+            mv \
+                "$HOME/.kube/config.k8squest.bak" \
+                "$default_kube"
+
+            info "Restored previous ~/.kube/config"
+
+        fi
+
+    fi
+}
+
+# ============================================================
+# Cluster selection
+# ============================================================
+
+EXISTING_CLUSTERS="$(_check_existing_clusters)"
+
+echo ""
+echo "🔍 Cluster detection"
+echo "--------------------"
+
+if [ -n "$EXISTING_CLUSTERS" ]; then
+    echo "Detected: $EXISTING_CLUSTERS"
+else
+    echo "No existing cluster detected."
 fi
 
-# Ensure KUBECONFIG is set for the engine
-if [ "$K8S_CLUSTER_TYPE" = "k3s" ] && [ -z "${KUBECONFIG:-}" ] && [ -f "$HOME/.kube/k3s-config" ]; then
-  export KUBECONFIG="$HOME/.kube/k3s-config"
-  echo "ℹ️  Using kubeconfig: $KUBECONFIG"
+echo ""
+
+# ============================================================
+# Explicit K8S_CLUSTER_TYPE
+# ============================================================
+
+if [ -n "${K8S_CLUSTER_TYPE:-}" ]; then
+
+    case "$K8S_CLUSTER_TYPE" in
+
+        kind)
+            _use_kind
+            ;;
+
+        k3s)
+            _setup_k3s_kubeconfig
+            export K8S_CLUSTER_TYPE="k3s"
+            ;;
+
+        bare|kubernetes|k8s|existing)
+            _use_bare_kubernetes
+            ;;
+
+        *)
+            error "Unknown K8S_CLUSTER_TYPE: $K8S_CLUSTER_TYPE
+
+Supported:
+
+    kind
+    k3s
+    bare"
+
+            ;;
+    esac
+
+else
+
+    # ========================================================
+    # If an existing kubectl cluster is available, offer it
+    # ========================================================
+
+    CURRENT_CONTEXT="$(kubectl config current-context 2>/dev/null || true)"
+
+    if [ -n "$CURRENT_CONTEXT" ] &&
+       kubectl cluster-info >/dev/null 2>&1; then
+
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║           ☸️  KUBERNETES CLUSTER DETECTED                  ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+        echo "Current kubectl context:"
+        echo "  $CURRENT_CONTEXT"
+        echo ""
+        echo "Choose how K8sQuest should run:"
+        echo ""
+        echo "  1) ☸️  Use existing Kubernetes cluster"
+        echo "  2) 🐳 Use Kind"
+        echo "  3) 🚀 Use k3s"
+        echo ""
+        read -r -p "Select option [1-3] (default: 1): " CLUSTER_CHOICE
+
+        case "${CLUSTER_CHOICE:-1}" in
+
+            1)
+                _use_bare_kubernetes
+                ;;
+
+            2)
+                export K8S_CLUSTER_TYPE="kind"
+                _use_kind
+                ;;
+
+            3)
+                export K8S_CLUSTER_TYPE="k3s"
+                _install_k3s
+                ;;
+
+            *)
+                error "Invalid option."
+                ;;
+        esac
+
+    else
+
+        # ====================================================
+        # No current Kubernetes cluster
+        # ====================================================
+
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║          🎮 SELECT KUBERNETES CLUSTER TYPE 🎮              ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo ""
+
+        echo "  1) 🐳 Kind"
+        echo "     Development / learning / CI"
+        echo ""
+        echo "  2) 🚀 k3s"
+        echo "     Lightweight Kubernetes"
+        echo ""
+        echo "  3) ☸️  Existing Kubernetes"
+        echo "     kubeadm / bare metal / VM / cloud"
+        echo ""
+
+        read -r -p "Select cluster type [1-3] (default: 1): " CLUSTER_CHOICE
+
+        case "${CLUSTER_CHOICE:-1}" in
+
+            1)
+                export K8S_CLUSTER_TYPE="kind"
+                _use_kind
+                ;;
+
+            2)
+                export K8S_CLUSTER_TYPE="k3s"
+                _install_k3s
+                ;;
+
+            3)
+                export K8S_CLUSTER_TYPE="bare"
+                _use_bare_kubernetes
+                ;;
+
+            *)
+                error "Invalid option."
+                ;;
+        esac
+
+    fi
+
 fi
 
-"$PYTHON" engine/engine.py
+# ============================================================
+# Display final cluster information
+# ============================================================
+
+echo ""
+echo "============================================================"
+echo "☸️  Kubernetes Environment"
+echo "============================================================"
+echo ""
+
+echo "Cluster type:"
+echo "  ${K8S_CLUSTER_TYPE:-unknown}"
+
+echo ""
+
+echo "Context:"
+kubectl config current-context
+
+echo ""
+
+echo "Server:"
+kubectl cluster-info | head -1 || true
+
+echo ""
+
+echo "Nodes:"
+kubectl get nodes
+
+echo ""
+
+echo "Namespace:"
+kubectl get namespace "$NAMESPACE"
+
+# ============================================================
+# Run K8sQuest engine
+# ============================================================
+
+echo ""
+echo "============================================================"
+echo "🎮 Starting K8sQuest"
+echo "============================================================"
+echo ""
+
+export K8S_CLUSTER_TYPE="${K8S_CLUSTER_TYPE:-bare}"
+
+"$PYTHON" "$SCRIPT_DIR/engine/engine.py"
