@@ -548,6 +548,64 @@ class K8sQuest:
             use_alt_buffer=False  # Keep debrief in terminal history
         )
 
+    def get_completed_debriefs(self):
+        """Return completed levels that have a debrief, in level order."""
+        worlds_dir = self.base_dir / "worlds"
+        completed_levels = set(self.progress.get("completed_levels", []))
+
+        def natural_sort_key(path):
+            import re
+
+            return [
+                int(part) if part.isdigit() else part.lower()
+                for part in re.split(r"(\d+)", path.name)
+            ]
+
+        debriefs = []
+        for world_path in sorted(worlds_dir.iterdir(), key=natural_sort_key):
+            if not world_path.is_dir() or world_path.name.startswith("."):
+                continue
+            for level_path in sorted(world_path.iterdir(), key=natural_sort_key):
+                if (
+                    level_path.is_dir()
+                    and level_path.name in completed_levels
+                    and (level_path / "debrief.md").exists()
+                ):
+                    debriefs.append((level_path.name, level_path))
+        return debriefs
+
+    def review_completed_debriefs(self):
+        """Let the player revisit debriefs from completed levels."""
+        debriefs = self.get_completed_debriefs()
+        if not debriefs:
+            console.print("\n[yellow]No completed mission debriefs are available yet.[/yellow]\n")
+            return
+
+        while True:
+            console.clear()
+            console.print(
+                Panel(
+                    "[bold cyan]Review the learning notes from missions you have cleared.[/bold cyan]",
+                    title="[bold green]Completed Mission Debriefs[/bold green]",
+                    border_style="green",
+                )
+            )
+            for index, (level_name, level_path) in enumerate(debriefs, start=1):
+                mission = self.load_mission(level_path)
+                console.print(f"  [{index:2d}] {mission.get('name', level_name)}")
+            console.print("  [q] Return to the main menu\n")
+
+            choice = Prompt.ask(
+                "Choose a debrief",
+                choices=[str(index) for index in range(1, len(debriefs) + 1)] + ["q"],
+                default="q",
+            )
+            if choice == "q":
+                return
+
+            _, level_path = debriefs[int(choice) - 1]
+            self.show_debrief(level_path)
+
     def show_solution_file(self, level_path):
         """Display the solution.yaml file contents"""
         solution_file = level_path / "solution.yaml"
@@ -1457,10 +1515,16 @@ def main():
         console.print("  [1] Continue from where you left off", markup=False)
         console.print("  [2] Play a specific level", markup=False)
         console.print("  [3] Start from the beginning", markup=False)
+        if game.get_completed_debriefs():
+            console.print("  [4] Review completed mission debriefs", markup=False)
         console.print("  [q] Quit", markup=False)
         console.print()
 
-        choice = Prompt.ask("Your choice", choices=["1", "2", "3", "q"], default="1")
+        menu_choices = ["1", "2", "3"]
+        if game.get_completed_debriefs():
+            menu_choices.append("4")
+        menu_choices.append("q")
+        choice = Prompt.ask("Your choice", choices=menu_choices, default="1")
 
         if choice == "1":
             # Find which world to start from
@@ -1489,8 +1553,11 @@ def main():
             for world in all_worlds:
                 if not game.play_world(world):
                     break  # Player quit
+        elif choice == "4":
+            game.review_completed_debriefs()
+            main()
         else:
-            console.print("\n[yellow]See you later, Padawan![/yellow]\n")
+            console.print(f"\n[yellow]See you later, {game.progress['player_name']}![/yellow]\n")
     else:
         if Confirm.ask("Ready to start your training?", default=True):
             # Play all worlds from the beginning
@@ -1498,7 +1565,7 @@ def main():
                 if not game.play_world(world):
                     break  # Player quit
         else:
-            console.print("\n[yellow]See you later, Padawan![/yellow]\n")
+            console.print(f"\n[yellow]See you later, {game.progress['player_name']}![/yellow]\n")
 
 
 if __name__ == "__main__":
