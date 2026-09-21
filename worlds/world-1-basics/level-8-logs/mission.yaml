@@ -1,6 +1,6 @@
 name: "Pod Logs Mystery"
-description: "Pod is running but the application isn't working. The problem is only visible in logs"
-objective: "Find and fix the configuration issue causing the application to fail silently"
+description: "The database container exits because of an application configuration error. Diagnose the cause in its logs."
+objective: "Find the missing PostgreSQL configuration in the logs and fix the pod"
 xp: 150
 difficulty: beginner
 expected_time: 12m

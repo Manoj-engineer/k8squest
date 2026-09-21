@@ -2,15 +2,15 @@
 
 ## What Happened
 
-The PostgreSQL container needed the `POSTGRES_PASSWORD` environment variable to initialize, but it wasn't provided. The container started, failed immediately, restarted, and repeated—entering CrashLoopBackOff. The only way to discover this was by checking the logs.
+The PostgreSQL container needed the `POSTGRES_PASSWORD` environment variable to initialize, but it wasn't provided. The container started, failed immediately, and Kubernetes restarted it—eventually showing `Error` or `CrashLoopBackOff`. The failure was an application configuration problem, and the only reliable way to discover the missing setting was by checking the container logs.
 
 ## The Correct Mental Model
 
-**Logs are your debugging superpower**. Not all failures are visible in `kubectl describe`. Some applications:
-- Start successfully (so the pod shows "Running")
-- Fail due to configuration errors
-- Exit immediately
-- Restart and repeat
+**Logs are your debugging superpower**. Kubernetes can report that a container is failing, but it cannot explain every application-specific configuration error. A container may:
+- Start and print a useful error before exiting
+- Fail due to a missing environment variable
+- Restart and repeat until it enters CrashLoopBackOff
+- Look healthy at the Kubernetes resource level while the application is unavailable
 
 **Log locations in Kubernetes**:
 - Container logs: Captured from stdout/stderr

@@ -2,8 +2,12 @@
 
 Check the pod status: `kubectl get pod database-app -n k8squest`
 
-Look at the RESTARTS column. Is it restarting repeatedly?
+The container may be in `Error` or restarting. Check its current logs:
 
-Now check the logs: `kubectl logs database-app -n k8squest`
+`kubectl logs database-app -n k8squest`
 
-What error do you see?
+If it has already restarted, inspect the previous container instance:
+
+`kubectl logs database-app --previous -n k8squest`
+
+What PostgreSQL configuration error do you see?
