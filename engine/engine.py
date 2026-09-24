@@ -1199,6 +1199,10 @@ Look for "2/2" ready replicas!
                 console.print(
                     "\n[yellow]👋 Thanks for playing K8sQuest! Progress saved.[/yellow]\n"
                 )
+                subprocess.run(
+                    ["kubectl", "delete", "namespace", "k8squest", "--ignore-not-found"],
+                    capture_output=True
+                )
                 sys.exit(0)
 
     def play_specific_level_by_name(self, level_name: str):
