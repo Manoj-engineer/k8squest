@@ -1300,8 +1300,17 @@ Look for "2/2" ready replicas!
                 self.progress["current_world"] = world_name
                 self.save_progress()
 
-                # Play the level
-                self.play_level(level_path, level_name)
+                # Play the same level if it gets reset
+                while True:
+                    result = self.play_level(level_path, level_name)
+                    
+                    if result is None:
+                        continue  # Restart the same level
+                    
+                    if not result:
+                        return False  # Player quit or stopped
+                    
+                    break
 
                 # After playing, ask what to do next
                 console.print("\n[cyan]What would you like to do?[/cyan]")
