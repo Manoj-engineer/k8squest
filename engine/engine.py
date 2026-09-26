@@ -1069,14 +1069,14 @@ Look for "2/2" ready replicas!
                 action = Prompt.ask(
                     "⚔️  Choose your action",
                     choices=[
-                        "check",
-                        "guide",
-                        "hints",
-                        "solution",
-                        "validate",
-                        "restart",
+                        "check","c",
+                        "guide","g",
+                        "hints","h",
+                        "solution","s",
+                        "validate","v",
+                        "restart","r",
                         "skip",
-                        "quit",
+                        "quit","q",
                     ],
                     default="check",
                 )
@@ -1084,16 +1084,16 @@ Look for "2/2" ready replicas!
                 console.print("\n[yellow]Session disconnected.[/yellow]")
                 return False
 
-            if action == "check":
+            if action in ["check", "c"]:
                 # Real-time status monitoring
                 self.monitor_status(level_name, duration=10)
 
-            elif action == "guide":
+            elif action in ["guide", "g"]:
                 if RETRO_UI_ENABLED:
                     show_power_up_notification("guide")
                 self.show_step_by_step_guide(level_name)
 
-            elif action == "hints":
+            elif action in ["hints", "h"]:
                 # Unlock next hint level
                 current_hint_level += 1
                 if RETRO_UI_ENABLED:
@@ -1104,7 +1104,7 @@ Look for "2/2" ready replicas!
                     level_path, current_hint_level, show_all=False
                 )
 
-            elif action == "solution":
+            elif action in ["solution", "s"]:
                 console.print("\n[yellow]📄 Showing solution file...[/yellow]\n")
                 if RETRO_UI_ENABLED:
                     show_power_up_notification("solution")
@@ -1113,7 +1113,7 @@ Look for "2/2" ready replicas!
                     "[dim]💡 Use this as reference to fix the broken configuration[/dim]\n"
                 )
 
-            elif action == "validate":
+            elif action in ["validate", "v"]:
                 attempts += 1
                 console.print(f"\n[dim]⚔️  ATTEMPT #{attempts}[/dim]")
 
@@ -1183,7 +1183,7 @@ Look for "2/2" ready replicas!
                     if not Confirm.ask("Try again?", default=True):
                         return False
 
-            elif action == "restart":
+            elif action in ["restart", "r"]:
                 if Confirm.ask(
                     "Restart this level?", default=True
                 ):
@@ -1195,7 +1195,7 @@ Look for "2/2" ready replicas!
                 ):
                     return True
 
-            elif action == "quit":
+            elif action in ["quit", "q"]:
                 console.print(
                     "\n[yellow]👋 Thanks for playing K8sQuest! Progress saved.[/yellow]\n"
                 )
