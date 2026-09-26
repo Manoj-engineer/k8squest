@@ -53,12 +53,20 @@ echo ""
 # Create Kubernetes cluster
 if ! kind get clusters | grep k8squest >/dev/null 2>&1; then
   echo "🔧 Creating Kubernetes cluster..."
-  kind create cluster --name k8squest
+  kind create cluster --name k8squest --config kind.conf
 else
   echo "✅ Cluster already exists"
 fi
 
 kubectl config use-context kind-k8squest
+
+# setup ingress controller
+echo "🏗️  Setting up traefik ingress controller..."
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm install traefik traefik/traefik -n traefik --create-namespace \
+  --set ports.web.nodePort=30080 \
+  --set service.type=NodePort
 
 # Create k8squest namespace
 echo "🏗️  Setting up k8squest namespace..."
