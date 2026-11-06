@@ -60,6 +60,17 @@ Quick setup - just run:
 ./install.sh
 ```
 
+`./play.sh` checks PyYAML and rich before configuring Kubernetes. If either is
+missing, it installs `requirements.txt` into the Python environment used to run
+the game. It uses that interpreter's pip, bootstraps pip with ensurepip when
+available, or uses uv if installed. If dependency setup fails, the launcher stops
+before changing the cluster.
+
+If an incomplete virtual environment has neither pip nor ensurepip, install the
+matching `python3-venv` package on Debian/Ubuntu, then run
+`venv/bin/python3 -m ensurepip --upgrade` and retry `./play.sh`. Alternatively,
+install uv and retry `./play.sh`.
+
 ### Windows Installation
 
 K8sQuest supports Windows! Follow these steps:
