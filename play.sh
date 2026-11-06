@@ -1,7 +1,8 @@
 #!/bin/bash
 # Quick launcher for K8sQuest
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
+source engine/python_env.sh || exit 1
 
 # Resolve the Python interpreter to use, in priority order:
 _find_python() {
@@ -204,6 +205,18 @@ if [ -z "$PYTHON" ]; then
   echo "❌ No Python environment found. Please run ./install.sh first"
   echo "   Supported: conda env, virtualenv, or project venv (created by install.sh)"
   exit 1
+fi
+
+if ! "$PYTHON" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)'; then
+  echo "❌ K8sQuest requires Python 3.9+ in the selected environment: $PYTHON"
+  exit 1
+fi
+
+if ! python_dependencies_ready "$PYTHON"; then
+  if ! install_python_dependencies "$PYTHON"; then
+    echo "❌ Python dependency setup failed. Fix the error above and run ./play.sh again."
+    exit 1
+  fi
 fi
 
 # Check and install jq if needed (required for some level validations)

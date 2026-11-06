@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+cd "$(dirname "$0")"
+source engine/python_env.sh
+
 echo "🎮 K8sQuest Installation"
 echo "========================"
 echo ""
@@ -45,7 +48,15 @@ else
   echo "Expected: venv/bin/activate or venv/Scripts/activate"
   exit 1
 fi
-pip install -q -r requirements.txt
+if [ -x "venv/bin/python3" ]; then
+  PYTHON="venv/bin/python3"
+elif [ -x "venv/Scripts/python.exe" ]; then
+  PYTHON="venv/Scripts/python.exe"
+else
+  echo "❌ Python executable not found in venv."
+  exit 1
+fi
+install_python_dependencies "$PYTHON"
 
 echo "✅ Python packages installed"
 echo ""
